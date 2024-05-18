@@ -1,11 +1,3 @@
-//
-//  WebViewJavascriptBridge.m
-//  ExampleApp-iOS
-//
-//  Created by Marcus Westin on 6/14/13.
-//  Copyright (c) 2013 Marcus Westin. All rights reserved.
-//
-
 #import "WebViewJavascriptBridge.h"
 
 #if defined(supportsWKWebView)
@@ -89,7 +81,6 @@
     [_base disableJavscriptAlertBoxSafetyTimeout];
 }
 
-
 /* Platform agnostic internals
  *****************************/
 
@@ -101,81 +92,39 @@
 }
 
 - (NSString*) _evaluateJavascript:(NSString*)javascriptCommand {
-    return [_webView stringByEvaluatingJavaScriptFromString:javascriptCommand];
+    return [_webView evaluateJavaScript:javascriptCommand completionHandler:nil];
 }
-
-#if defined WVJB_PLATFORM_OSX
-/* Platform specific internals: OSX
- **********************************/
 
 - (void) _platformSpecificSetup:(WVJB_WEBVIEW_TYPE*)webView {
     _webView = webView;
-    _webView.policyDelegate = self;
+    _webView.navigationDelegate = self;
     _base = [[WebViewJavascriptBridgeBase alloc] init];
     _base.delegate = self;
 }
 
 - (void) _platformSpecificDealloc {
-    _webView.policyDelegate = nil;
+    _webView.navigationDelegate = nil;
 }
 
-- (void)webView:(WebView *)webView decidePolicyForNavigationAction:(NSDictionary *)actionInformation request:(NSURLRequest *)request frame:(WebFrame *)frame decisionListener:(id<WebPolicyDecisionListener>)listener {
-    if (webView != _webView) { return; }
-    
-    NSURL *url = [request URL];
-    if ([_base isWebViewJavascriptBridgeURL:url]) {
-        if ([_base isBridgeLoadedURL:url]) {
-            [_base injectJavascriptFile];
-        } else if ([_base isQueueMessageURL:url]) {
-            NSString *messageQueueString = [self _evaluateJavascript:[_base webViewJavascriptFetchQueyCommand]];
-            [_base flushMessageQueue:messageQueueString];
-        } else {
-            [_base logUnkownMessage:url];
-        }
-        [listener ignore];
-    } else if (_webViewDelegate && [_webViewDelegate respondsToSelector:@selector(webView:decidePolicyForNavigationAction:request:frame:decisionListener:)]) {
-        [_webViewDelegate webView:webView decidePolicyForNavigationAction:actionInformation request:request frame:frame decisionListener:listener];
-    } else {
-        [listener use];
-    }
-}
-
-
-
-#elif defined WVJB_PLATFORM_IOS
-/* Platform specific internals: iOS
- **********************************/
-
-- (void) _platformSpecificSetup:(WVJB_WEBVIEW_TYPE*)webView {
-    _webView = webView;
-    _webView.delegate = self;
-    _base = [[WebViewJavascriptBridgeBase alloc] init];
-    _base.delegate = self;
-}
-
-- (void) _platformSpecificDealloc {
-    _webView.delegate = nil;
-}
-
-- (void)webViewDidFinishLoad:(UIWebView *)webView {
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
     if (webView != _webView) { return; }
     
     __strong WVJB_WEBVIEW_DELEGATE_TYPE* strongDelegate = _webViewDelegate;
-    if (strongDelegate && [strongDelegate respondsToSelector:@selector(webViewDidFinishLoad:)]) {
-        [strongDelegate webViewDidFinishLoad:webView];
+    if (strongDelegate && [strongDelegate respondsToSelector:@selector(webView:didFinishNavigation:)]) {
+        [strongDelegate webView:webView didFinishNavigation:navigation];
     }
 }
 
-- (void)webView:(UIWebView *)webView didFailLoadWithError:(NSError *)error {
+- (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error {
     if (webView != _webView) { return; }
     
     __strong WVJB_WEBVIEW_DELEGATE_TYPE* strongDelegate = _webViewDelegate;
-    if (strongDelegate && [strongDelegate respondsToSelector:@selector(webView:didFailLoadWithError:)]) {
-        [strongDelegate webView:webView didFailLoadWithError:error];
+    if (strongDelegate && [strongDelegate respondsToSelector:@selector(webView:didFailNavigation:withError:)]) {
+        [strongDelegate webView:webView didFailNavigation:navigation withError:error];
     }
 }
 
-- (BOOL)webView:(UIWebView *)webView shouldStartLoadWithRequest:(NSURLRequest *)request navigationType:(UIWebViewNavigationType)navigationType {
+- (BOOL)webView:(WKWebView *)webView shouldStartLoadWithRequest:(NSURLRequest *)request navigationType:(WKNavigationType)navigationType {
     if (webView != _webView) { return YES; }
     
     NSURL *url = [request URL];
@@ -197,7 +146,7 @@
     }
 }
 
-- (void)webViewDidStartLoad:(UIWebView *)webView {
+- (void)webViewDidStartLoad:(WKWebView *)webView {
     if (webView != _webView) { return; }
     
     __strong WVJB_WEBVIEW_DELEGATE_TYPE* strongDelegate = _webViewDelegate;
@@ -205,7 +154,5 @@
         [strongDelegate webViewDidStartLoad:webView];
     }
 }
-
-#endif
 
 @end
