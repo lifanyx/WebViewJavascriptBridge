@@ -92,7 +92,14 @@
 }
 
 - (NSString*) _evaluateJavascript:(NSString*)javascriptCommand {
-    return [_webView evaluateJavaScript:javascriptCommand completionHandler:nil];
+    __block NSString* result = nil;
+    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+    [_webView evaluateJavaScript:javascriptCommand completionHandler:^(id res, NSError *error) {
+        result = [res isKindOfClass:[NSString class]] ? res : nil;
+        dispatch_semaphore_signal(semaphore);
+    }];
+    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+    return result;
 }
 
 - (void) _platformSpecificSetup:(WVJB_WEBVIEW_TYPE*)webView {
@@ -124,34 +131,21 @@
     }
 }
 
-- (BOOL)webView:(WKWebView *)webView shouldStartLoadWithRequest:(NSURLRequest *)request navigationType:(WKNavigationType)navigationType {
-    if (webView != _webView) { return YES; }
-    
-    NSURL *url = [request URL];
+- (void)webView:(WKWebView *)webView didStartProvisionalNavigation:(WKNavigation *)navigation {
+    if (webView != _webView) { return; }
+
     __strong WVJB_WEBVIEW_DELEGATE_TYPE* strongDelegate = _webViewDelegate;
-    if ([_base isWebViewJavascriptBridgeURL:url]) {
-        if ([_base isBridgeLoadedURL:url]) {
-            [_base injectJavascriptFile];
-        } else if ([_base isQueueMessageURL:url]) {
-            NSString *messageQueueString = [self _evaluateJavascript:[_base webViewJavascriptFetchQueyCommand]];
-            [_base flushMessageQueue:messageQueueString];
-        } else {
-            [_base logUnkownMessage:url];
-        }
-        return NO;
-    } else if (strongDelegate && [strongDelegate respondsToSelector:@selector(webView:shouldStartLoadWithRequest:navigationType:)]) {
-        return [strongDelegate webView:webView shouldStartLoadWithRequest:request navigationType:navigationType];
-    } else {
-        return YES;
+    if (strongDelegate && [strongDelegate respondsToSelector:@selector(webView:didStartProvisionalNavigation:)]) {
+        [strongDelegate webView:webView didStartProvisionalNavigation:navigation];
     }
 }
 
-- (void)webViewDidStartLoad:(WKWebView *)webView {
+- (void)webView:(WKWebView *)webView didCommitNavigation:(WKNavigation *)navigation {
     if (webView != _webView) { return; }
-    
+
     __strong WVJB_WEBVIEW_DELEGATE_TYPE* strongDelegate = _webViewDelegate;
-    if (strongDelegate && [strongDelegate respondsToSelector:@selector(webViewDidStartLoad:)]) {
-        [strongDelegate webViewDidStartLoad:webView];
+    if (strongDelegate && [strongDelegate respondsToSelector:@selector(webView:didCommitNavigation:)]) {
+        [strongDelegate webView:webView didCommitNavigation:navigation];
     }
 }
 
